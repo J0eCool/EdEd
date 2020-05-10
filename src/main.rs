@@ -14,7 +14,7 @@ use sdl2::{
     video::GLProfile,
 };
 use std::{
-    ffi::{CString, CStr},
+    ffi::CString,
     time::Duration,
 };
 
@@ -29,7 +29,7 @@ fn main() -> Result<()> {
     gl_attr.set_context_profile(GLProfile::Core);
     gl_attr.set_context_version(3, 3);
  
-    let window = video_subsystem.window("Editor", 800, 600)
+    let window = video_subsystem.window("EdEditor", 800, 600)
         .position_centered()
         .opengl()
         .resizable()
@@ -43,13 +43,14 @@ fn main() -> Result<()> {
 
     // Square model, 1x1, centered at 0
     let vertices: Vec<f32> = vec![
-        -0.5, -0.5, 0.0,
-        0.5, -0.5, 0.0,
-        0.5, 0.5, 0.0,
+        // Position           UV
+        -0.5, -0.5, 0.0,      0.0, 0.0,
+        0.5, -0.5, 0.0,       1.0, 0.0,
+        0.5, 0.5, 0.0,        1.0, 1.0,
 
-        0.5, 0.5, 0.0,
-        -0.5, 0.5, 0.0,
-        -0.5, -0.5, 0.0,
+        0.5, 0.5, 0.0,        1.0, 1.0,
+        -0.5, 0.5, 0.0,       0.0, 1.0,
+        -0.5, -0.5, 0.0,      0.0, 0.0,
     ];
     let mut vbo: GLuint = 0; // VBO to store vertex data
     unsafe {
@@ -71,14 +72,26 @@ fn main() -> Result<()> {
         gl::BindVertexArray(vao);
         gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
 
+        // Bind Position
         gl::EnableVertexAttribArray(0); // this is "layout (location = 0)" in vertex shader
         gl::VertexAttribPointer(
             0, // index of the generic vertex attribute ("layout (location = 0)")
             3, // the number of components per generic vertex attribute
             gl::FLOAT, // data type
             gl::FALSE, // normalized (int-to-float conversion)
-            (3 * std::mem::size_of::<f32>()) as gl::types::GLint, // stride (byte offset between consecutive attributes)
+            (5 * std::mem::size_of::<f32>()) as gl::types::GLint, // stride (byte offset between consecutive attributes)
             std::ptr::null() // offset of the first component
+        );
+
+        // Bind Color
+        gl::EnableVertexAttribArray(1);
+        gl::VertexAttribPointer(
+            1, // index of the generic vertex attribute ("layout (location = 0)")
+            2, // the number of components per generic vertex attribute
+            gl::FLOAT, // data type
+            gl::FALSE, // normalized (int-to-float conversion)
+            (5 * std::mem::size_of::<f32>()) as gl::types::GLint, // stride (byte offset between consecutive attributes)
+            (3 * std::mem::size_of::<f32>()) as *const gl::types::GLvoid // offset of the first component
         );
 
         // unbind
@@ -98,9 +111,15 @@ fn main() -> Result<()> {
     // `HelloCallback` type and its associated implementation of `Callback.
     println!("Creating callback...");
 
-    let draw = Func::wrap(&store, move |x: i32| {
+    let draw = Func::wrap(&store, move |_x: i32| {
         unsafe {
             gl::BindVertexArray(vao);
+            // gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+
+            // // Set color
+            // // gl::EnableVertexAttribArray(1);
+            // gl::VertexAttrib3f(1, x as f32 / 400.0, 0.2, 0.2);
+
             gl::DrawArrays(gl::TRIANGLES, 0, 6);
         }
     });
@@ -124,8 +143,8 @@ fn main() -> Result<()> {
         .get0::<()>()?;
 
     println!("Loading shaders");
-    let vert_shader = Shader::from_source_vert(&CString::new(include_str!("../resources/shaders/triangle.vert")).unwrap()).unwrap();
-    let frag_shader = Shader::from_source_frag(&CString::new(include_str!("../resources/shaders/triangle.frag")).unwrap()).unwrap();
+    let vert_shader = Shader::from_source_vert(include_str!("../resources/shaders/simple.vert")).unwrap();
+    let frag_shader = Shader::from_source_frag(include_str!("../resources/shaders/triangle.frag")).unwrap();
     let shader_program = ShaderProgram::from_shaders(&[vert_shader, frag_shader]).unwrap();
 
     println!("Starting main loop");
@@ -147,7 +166,7 @@ fn main() -> Result<()> {
                 _ => {}
             }
         }
-        
+
         shader_program.set_used();
         frame()?;
 
@@ -166,10 +185,10 @@ struct Shader {
     id: GLuint,
 }
 impl Shader {
-    pub fn from_source(source: &CStr, kind: GLuint) -> Result<Shader, String> {
+    pub fn from_source(source: &str, kind: GLuint) -> Result<Shader, String> {
         let id = unsafe { gl::CreateShader(kind) };
         unsafe {
-            gl::ShaderSource(id, 1, &source.as_ptr(), std::ptr::null());
+            gl::ShaderSource(id, 1, &CString::new(source).unwrap().as_ptr(), std::ptr::null());
             gl::CompileShader(id);
             let mut success: GLint = 1;
             gl::GetShaderiv(id, gl::COMPILE_STATUS, &mut success);
@@ -179,10 +198,10 @@ impl Shader {
         }
         Ok(Shader { id })
     }
-    pub fn from_source_vert(source: &CStr) -> Result<Shader, String> {
+    pub fn from_source_vert(source: &str) -> Result<Shader, String> {
         Shader::from_source(source, gl::VERTEX_SHADER)
     }
-    pub fn from_source_frag(source: &CStr) -> Result<Shader, String> {
+    pub fn from_source_frag(source: &str) -> Result<Shader, String> {
         Shader::from_source(source, gl::FRAGMENT_SHADER)
     }
     fn id(&self) -> GLuint {
