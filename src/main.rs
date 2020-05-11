@@ -59,13 +59,13 @@ fn main() -> Result<()> {
 
         gl::BufferData(
             gl::ARRAY_BUFFER, // target
-            (vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr, // size of data in bytes
-            vertices.as_ptr() as *const gl::types::GLvoid, // pointer to data
+            (vertices.len() * std::mem::size_of::<f32>()) as GLsizeiptr, // size of data in bytes
+            vertices.as_ptr() as *const GLvoid, // pointer to data
             gl::STATIC_DRAW, // usage
         );
         gl::BindBuffer(gl::ARRAY_BUFFER, 0); // unbind the buffer
     }
-    let mut vao: gl::types::GLuint = 0;
+    let mut vao: GLuint = 0;
     unsafe {
         gl::GenVertexArrays(1, &mut vao);
 
@@ -79,24 +79,44 @@ fn main() -> Result<()> {
             3, // the number of components per generic vertex attribute
             gl::FLOAT, // data type
             gl::FALSE, // normalized (int-to-float conversion)
-            (5 * std::mem::size_of::<f32>()) as gl::types::GLint, // stride (byte offset between consecutive attributes)
+            (5 * std::mem::size_of::<f32>()) as GLint, // stride (byte offset between consecutive attributes)
             std::ptr::null() // offset of the first component
         );
 
-        // Bind Color
+        // Bind UV Coords
         gl::EnableVertexAttribArray(1);
         gl::VertexAttribPointer(
             1, // index of the generic vertex attribute ("layout (location = 0)")
             2, // the number of components per generic vertex attribute
             gl::FLOAT, // data type
             gl::FALSE, // normalized (int-to-float conversion)
-            (5 * std::mem::size_of::<f32>()) as gl::types::GLint, // stride (byte offset between consecutive attributes)
-            (3 * std::mem::size_of::<f32>()) as *const gl::types::GLvoid // offset of the first component
+            (5 * std::mem::size_of::<f32>()) as GLint, // stride (byte offset between consecutive attributes)
+            (3 * std::mem::size_of::<f32>()) as *const GLvoid // offset of the first component
         );
 
         // unbind
         gl::BindBuffer(gl::ARRAY_BUFFER, 0);
         gl::BindVertexArray(0);
+    }
+
+    let tex_w: i32 = 16;
+    let tex_h: i32 = 16;
+    let mut tex_id: GLuint = 0;
+    let mut tex_data: Vec<u8> = vec![];
+    for x in 0..tex_w {
+        for y in 0..tex_h {
+            let i = x + tex_w * y;
+            tex_data.push(((x * y) % 256) as u8);
+        }
+    }
+    unsafe {
+        gl::GenTextures(1, &mut tex_id);
+        gl::BindTexture(gl::TEXTURE_2D, tex_id);
+        gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RED as i32, tex_w, tex_h, 0, gl::RED as u32,
+            gl::UNSIGNED_BYTE, tex_data.as_ptr() as *const GLvoid);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+        gl::BindTexture(gl::TEXTURE_2D, 0);
     }
 
     // Configure the initial compilation environment, creating the global
@@ -143,8 +163,8 @@ fn main() -> Result<()> {
         .get0::<()>()?;
 
     println!("Loading shaders");
-    let vert_shader = Shader::from_source_vert(include_str!("../resources/shaders/simple.vert")).unwrap();
-    let frag_shader = Shader::from_source_frag(include_str!("../resources/shaders/triangle.frag")).unwrap();
+    let vert_shader = Shader::from_source_vert(include_str!("../resources/shaders/textured.vert")).unwrap();
+    let frag_shader = Shader::from_source_frag(include_str!("../resources/shaders/textured.frag")).unwrap();
     let shader_program = ShaderProgram::from_shaders(&[vert_shader, frag_shader]).unwrap();
 
     println!("Starting main loop");
@@ -168,6 +188,14 @@ fn main() -> Result<()> {
         }
 
         shader_program.set_used();
+        unsafe {
+            // TODO: I have no idea why this needs println! to function, ignoring for now
+            // let loc = gl::GetUniformLocation(shader_program.id, CString::new("Texture").unwrap().as_ptr());
+            // println!("Location: {}", loc);
+            let loc = -1;
+            gl::BindTexture(gl::TEXTURE_2D, tex_id);
+            gl::Uniform1i(loc, tex_id as i32);
+        }
         frame()?;
 
         // canvas.present();
@@ -193,7 +221,16 @@ impl Shader {
             let mut success: GLint = 1;
             gl::GetShaderiv(id, gl::COMPILE_STATUS, &mut success);
             if success == 0 {
-                println!("Oh no! Shader failed with message: {}", "[TODO]");
+                let mut len: GLint = 0;
+                gl::GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut len);
+                let mut buffer: Vec<u8> = Vec::with_capacity(len as usize);
+                for _ in 0..len {
+                    buffer.push(b' ');
+                }
+                let error: CString = CString::from_vec_unchecked(buffer);
+                gl::GetShaderInfoLog(id, len, std::ptr::null_mut(), error.as_ptr() as *mut GLchar);
+
+                println!("Oh no! Shader \"{}\" failed with message: {}", "[FILENAME]", error.to_string_lossy());
             }
         }
         Ok(Shader { id })
