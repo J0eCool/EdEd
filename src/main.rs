@@ -99,25 +99,29 @@ fn main() -> Result<()> {
         gl::BindVertexArray(0);
     }
 
-    let tex_w: i32 = 16;
-    let tex_h: i32 = 16;
+    let tex_w: i32 = 32;
+    let tex_h: i32 = 32;
     let mut tex_id: GLuint = 0;
     let mut tex_data: Vec<u8> = vec![];
-    for x in 0..tex_w {
-        for y in 0..tex_h {
-            let i = x + tex_w * y;
-            tex_data.push(((x * y) % 256) as u8);
-        }
+    for x in 0..(tex_w * tex_h) {
+        tex_data.push(0);
     }
     unsafe {
         gl::GenTextures(1, &mut tex_id);
-        gl::BindTexture(gl::TEXTURE_2D, tex_id);
-        gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RED as i32, tex_w, tex_h, 0, gl::RED as u32,
-            gl::UNSIGNED_BYTE, tex_data.as_ptr() as *const GLvoid);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-        gl::BindTexture(gl::TEXTURE_2D, 0);
     }
+    let mut set_tex_pixel = |i: usize, val: u8| {
+        tex_data[i] = val;
+        unsafe {
+            gl::BindTexture(gl::TEXTURE_2D, tex_id);
+            gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RED as i32, tex_w, tex_h, 0, gl::RED as u32,
+                gl::UNSIGNED_BYTE, tex_data.as_ptr() as *const GLvoid);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+            gl::BindTexture(gl::TEXTURE_2D, 0);
+        }
+    };
+    // Borrow checker won't allow for two mutable borrows; should go away with better abstraction?
+    set_tex_pixel(0, 0);
 
     // Configure the initial compilation environment, creating the global
     // `Store` structure. Note that you can also tweak configuration settings
@@ -169,6 +173,7 @@ fn main() -> Result<()> {
 
     println!("Starting main loop");
     let mut event_pump = sdl_context.event_pump().unwrap();
+    let mut is_mouse_down = false;
     'mainloop: loop {
         unsafe {
             gl::Viewport(0, 0, 800, 600);
@@ -182,6 +187,22 @@ fn main() -> Result<()> {
                 Event::Quit {..} |
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                     break 'mainloop
+                },
+                Event::MouseMotion { x, y, .. } => {
+                    if is_mouse_down {
+                        // Note: gross
+                        let i = ((x - 200) as f32 / 400.0 * tex_w as f32) as usize;
+                        let j = (1.0 - ((y - 450) as f32 / 300.0) * tex_h as f32) as usize;
+                        if i >= 0 && i < tex_w as usize && j >= 0 && j < tex_h as usize {
+                            set_tex_pixel(i + j * tex_w as usize, 0xff);
+                        }
+                    }
+                },
+                Event::MouseButtonDown { which, .. } => {
+                    if which == 0 { is_mouse_down = true; }
+                },
+                Event::MouseButtonUp { which, .. } => {
+                    if which == 0 { is_mouse_down = false; }
                 },
                 _ => {}
             }
