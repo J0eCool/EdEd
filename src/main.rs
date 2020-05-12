@@ -101,57 +101,60 @@ fn main() -> Result<()> {
         gl::BindVertexArray(0);
     }
 
-    let tex_w: i32 = 32;
-    let tex_h: i32 = 32;
-    let mut tex_id: GLuint = 0;
-    let mut tex_data: Vec<u8> = vec![];
-    for _ in 0..(tex_w * tex_h) {
-        tex_data.push(0);
-    }
-    unsafe {
-        gl::GenTextures(1, &mut tex_id);
-    }
-    let mut set_tex_pixel = |i: usize, val: u8| {
-        tex_data[i] = val;
-        unsafe {
-            gl::BindTexture(gl::TEXTURE_2D, tex_id);
-            gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RED as i32, tex_w, tex_h, 0, gl::RED as u32,
-                gl::UNSIGNED_BYTE, tex_data.as_ptr() as *const GLvoid);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-        }
-    };
-    // Borrow checker won't allow for two mutable borrows; should go away with better abstraction?
-    set_tex_pixel(0, 0);
-
     // Configure the initial compilation environment, creating the global
     // `Store` structure. Note that you can also tweak configuration settings
     // with a `Config` and an `Engine` if desired.
     println!("Compiling wasm module...");
     let store = Store::default();
     // Compile the wasm binary into an in-memory instance of a `Module`.
-    let module = Module::from_file(&store, "modules/out/game.wasm")?;
+    let module = Module::from_file(&store, "modules/out/canvas.wasm")?;
 
     // Here we handle the imports of the module, which in this case is our
     // `HelloCallback` type and its associated implementation of `Callback.
     println!("Creating callback...");
 
     // Dictionary of imports for "render" module
+    let mut memory: Option<Memory> = None;
     let mut render_imports: HashMap<String, Func> = HashMap::new();
-    render_imports.insert("draw".to_string(), Func::wrap(&store, move |_x: i32| {
+    render_imports.insert("drawImage".to_string(), Func::wrap(&store, move |tex_id: i32| {
         unsafe {
+            // TODO: I have no idea why this needs println! to function, ignoring for now
+            // let loc = gl::GetUniformLocation(shader_program.id, CString::new("Texture").unwrap().as_ptr());
+            // println!("Location: {}", loc);
+            let loc = -1;
+            gl::BindTexture(gl::TEXTURE_2D, tex_id as u32);
+            gl::Uniform1i(loc, tex_id);
             gl::BindVertexArray(vao);
-            // gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-
-            // // Set color
-            // // gl::EnableVertexAttribArray(1);
-            // gl::VertexAttrib3f(1, x as f32 / 400.0, 0.2, 0.2);
 
             gl::DrawArrays(gl::TRIANGLES, 0, 6);
         }
     }));
-    render_imports.insert("sin".to_string(), Func::wrap(&store, f32::sin));
+    render_imports.insert("allocImage".to_string(), Func::wrap(&store, || {
+        let mut tex_id: GLuint = 0;
+        unsafe {
+            gl::GenTextures(1, &mut tex_id);
+        }
+        tex_id as i32
+    }));
+    let clonemem = || memory.unwrap().clone();
+    render_imports.insert("updateImage".to_string(), Func::wrap(&store, move |tex_id: i32, image_ptr: i32, image_size: i32| {
+        let tex_w: i32 = 32;
+        let tex_h: i32 = 32;
+        let mut tex_data: Vec<u8> = vec![];
+        let mem = clonemem(); // TODO: borrow checker
+        for i in 0..image_size {
+            unsafe { tex_data.push(mem.data_unchecked()[(image_ptr + i) as usize]); }
+        }
+        unsafe {
+            gl::BindTexture(gl::TEXTURE_2D, tex_id as u32);
+            gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RED as i32, tex_w, tex_h, 0, gl::RED as u32,
+                gl::UNSIGNED_BYTE, tex_data.as_ptr() as *const GLvoid);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+            // unbind
+            gl::BindTexture(gl::TEXTURE_2D, 0);
+        }
+    }));
 
     let mut imports: Vec<Extern> = Vec::new();
     for import in module.imports() {
@@ -173,10 +176,18 @@ fn main() -> Result<()> {
 
     // Next we poke around a bit to extract the `frame` function from the module.
     println!("Extracting export...");
-    let frame = instance
-        .get_func("frame")
-        .ok_or(anyhow::format_err!("failed to find `frame` function export"))?
+    let init = instance
+        .get_func("init")
+        .ok_or(anyhow::format_err!("failed to find `init` function export"))?
         .get0::<()>()?;
+    let update = instance
+        .get_func("update")
+        .ok_or(anyhow::format_err!("failed to find `update` function export"))?
+        .get0::<()>()?;
+    let mouse_event = instance
+        .get_func("mouseEvent")
+        .ok_or(anyhow::format_err!("failed to find `mouseEvent` function export"))?
+        .get3::<i32, i32, i32, ()>()?;
 
     println!("Loading shaders");
     let vert_shader = Shader::from_source_vert(include_str!("../resources/shaders/textured.vert")).unwrap();
@@ -184,8 +195,9 @@ fn main() -> Result<()> {
     let shader_program = ShaderProgram::from_shaders(&[vert_shader, frag_shader]).unwrap();
 
     println!("Starting main loop");
+    memory = instance.get_memory("memory");
+    init()?;
     let mut event_pump = sdl_context.event_pump().unwrap();
-    let mut is_mouse_down = false;
     'mainloop: loop {
         unsafe {
             gl::Viewport(0, 0, 800, 600);
@@ -201,35 +213,24 @@ fn main() -> Result<()> {
                     break 'mainloop
                 },
                 Event::MouseMotion { x, y, .. } => {
-                    if is_mouse_down {
-                        // Note: gross
-                        let i = ((x - 200) as f32 / 400.0 * tex_w as f32) as usize;
-                        let j = (1.0 - ((y - 450) as f32 / 300.0) * tex_h as f32) as usize;
-                        if i < tex_w as usize && j < tex_h as usize {
-                            set_tex_pixel(i + j * tex_w as usize, 0xff);
-                        }
+                    mouse_event(0, x, y)?;
+                },
+                Event::MouseButtonDown { mouse_btn, x, y, .. } => {
+                    if mouse_btn == MouseButton::Left {
+                        mouse_event(1, x, y)?;
                     }
                 },
-                Event::MouseButtonDown { mouse_btn, .. } => {
-                    if mouse_btn == MouseButton::Left { is_mouse_down = true; }
-                },
-                Event::MouseButtonUp { mouse_btn, .. } => {
-                    if mouse_btn == MouseButton::Left { is_mouse_down = false; }
+                Event::MouseButtonUp { mouse_btn, x, y, .. } => {
+                    if mouse_btn == MouseButton::Left {
+                        mouse_event(2, x, y)?;
+                    }
                 },
                 _ => {}
             }
         }
 
         shader_program.set_used();
-        unsafe {
-            // TODO: I have no idea why this needs println! to function, ignoring for now
-            // let loc = gl::GetUniformLocation(shader_program.id, CString::new("Texture").unwrap().as_ptr());
-            // println!("Location: {}", loc);
-            let loc = -1;
-            gl::BindTexture(gl::TEXTURE_2D, tex_id);
-            gl::Uniform1i(loc, tex_id as i32);
-        }
-        frame()?;
+        update()?;
 
         // canvas.present();
         window.gl_swap_window();

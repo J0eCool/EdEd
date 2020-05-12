@@ -1,4 +1,4 @@
-WASM_FILES=modules/out/game.wasm
+WASM_FILES=modules/out/canvas.wasm
 
 default: $(WASM_FILES)
 
