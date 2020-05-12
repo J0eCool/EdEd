@@ -11,9 +11,11 @@ use gl::types::*;
 use sdl2::{
     event::Event,
     keyboard::Keycode,
+    mouse::MouseButton,
     video::GLProfile,
 };
 use std::{
+    collections::HashMap,
     ffi::CString,
     time::Duration,
 };
@@ -103,7 +105,7 @@ fn main() -> Result<()> {
     let tex_h: i32 = 32;
     let mut tex_id: GLuint = 0;
     let mut tex_data: Vec<u8> = vec![];
-    for x in 0..(tex_w * tex_h) {
+    for _ in 0..(tex_w * tex_h) {
         tex_data.push(0);
     }
     unsafe {
@@ -135,7 +137,9 @@ fn main() -> Result<()> {
     // `HelloCallback` type and its associated implementation of `Callback.
     println!("Creating callback...");
 
-    let draw = Func::wrap(&store, move |_x: i32| {
+    // Dictionary of imports for "render" module
+    let mut render_imports: HashMap<String, Func> = HashMap::new();
+    render_imports.insert("draw".to_string(), Func::wrap(&store, move |_x: i32| {
         unsafe {
             gl::BindVertexArray(vao);
             // gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
@@ -146,17 +150,25 @@ fn main() -> Result<()> {
 
             gl::DrawArrays(gl::TRIANGLES, 0, 6);
         }
-    });
-    let wasm_sin = Func::wrap(&store, f32::sin);
+    }));
+    render_imports.insert("sin".to_string(), Func::wrap(&store, f32::sin));
+
+    let mut imports: Vec<Extern> = Vec::new();
+    for import in module.imports() {
+        assert_eq!(import.module(), "render");
+        let func = render_imports.get(import.name()).unwrap();
+        imports.push(func.clone().into());
+    }
+
 
     // Once we've got that all set up we can then move to the instantiation
     // phase, pairing together a compiled module as well as a set of imports.
     // Note that this is where the wasm `start` function, if any, would run.
     println!("Instantiating module...");
-    let imports = [
-        wasm_sin.into(),
-        draw.into(),
-    ];
+    // let imports = [
+    //     wasm_sin.into(),
+    //     draw.into(),
+    // ];
     let instance = Instance::new(&module, &imports)?;
 
     // Next we poke around a bit to extract the `frame` function from the module.
@@ -193,16 +205,16 @@ fn main() -> Result<()> {
                         // Note: gross
                         let i = ((x - 200) as f32 / 400.0 * tex_w as f32) as usize;
                         let j = (1.0 - ((y - 450) as f32 / 300.0) * tex_h as f32) as usize;
-                        if i >= 0 && i < tex_w as usize && j >= 0 && j < tex_h as usize {
+                        if i < tex_w as usize && j < tex_h as usize {
                             set_tex_pixel(i + j * tex_w as usize, 0xff);
                         }
                     }
                 },
-                Event::MouseButtonDown { which, .. } => {
-                    if which == 0 { is_mouse_down = true; }
+                Event::MouseButtonDown { mouse_btn, .. } => {
+                    if mouse_btn == MouseButton::Left { is_mouse_down = true; }
                 },
-                Event::MouseButtonUp { which, .. } => {
-                    if which == 0 { is_mouse_down = false; }
+                Event::MouseButtonUp { mouse_btn, .. } => {
+                    if mouse_btn == MouseButton::Left { is_mouse_down = false; }
                 },
                 _ => {}
             }

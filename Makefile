@@ -1,6 +1,6 @@
 WASM_FILES=modules/out/game.wasm
 
-default: build $(WASM_FILES)
+default: $(WASM_FILES)
 
 modules/out/hello.wasm: modules/hello.rs
 	mkdir -p modules/out
