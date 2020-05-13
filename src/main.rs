@@ -15,8 +15,10 @@ use sdl2::{
     video::GLProfile,
 };
 use std::{
+    cell::RefCell,
     collections::HashMap,
     ffi::CString,
+    rc::Rc,
     time::Duration,
 };
 
@@ -101,78 +103,17 @@ fn main() -> Result<()> {
         gl::BindVertexArray(0);
     }
 
-    // Configure the initial compilation environment, creating the global
-    // `Store` structure. Note that you can also tweak configuration settings
-    // with a `Config` and an `Engine` if desired.
-    println!("Compiling wasm module...");
-    let store = Store::default();
-    // Compile the wasm binary into an in-memory instance of a `Module`.
-    let module = Module::from_file(&store, "modules/out/canvas.wasm")?;
-
-    // Here we handle the imports of the module, which in this case is our
-    // `HelloCallback` type and its associated implementation of `Callback.
-    println!("Creating callback...");
-
-    // Dictionary of imports for "render" module
-    let mut memory: Option<Memory> = None;
-    let mut render_imports: HashMap<String, Func> = HashMap::new();
-    render_imports.insert("drawImage".to_string(), Func::wrap(&store, move |tex_id: i32| {
-        unsafe {
-            // TODO: I have no idea why this needs println! to function, ignoring for now
-            // let loc = gl::GetUniformLocation(shader_program.id, CString::new("Texture").unwrap().as_ptr());
-            // println!("Location: {}", loc);
-            let loc = -1;
-            gl::BindTexture(gl::TEXTURE_2D, tex_id as u32);
-            gl::Uniform1i(loc, tex_id);
-            gl::BindVertexArray(vao);
-
-            gl::DrawArrays(gl::TRIANGLES, 0, 6);
-        }
-    }));
-    render_imports.insert("allocImage".to_string(), Func::wrap(&store, || {
-        let mut tex_id: GLuint = 0;
-        unsafe {
-            gl::GenTextures(1, &mut tex_id);
-        }
-        tex_id as i32
-    }));
-    let clonemem = || memory.unwrap().clone();
-    render_imports.insert("updateImage".to_string(), Func::wrap(&store, move |tex_id: i32, image_ptr: i32, image_size: i32| {
-        let tex_w: i32 = 32;
-        let tex_h: i32 = 32;
-        let mut tex_data: Vec<u8> = vec![];
-        let mem = clonemem(); // TODO: borrow checker
-        for i in 0..image_size {
-            unsafe { tex_data.push(mem.data_unchecked()[(image_ptr + i) as usize]); }
-        }
-        unsafe {
-            gl::BindTexture(gl::TEXTURE_2D, tex_id as u32);
-            gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RED as i32, tex_w, tex_h, 0, gl::RED as u32,
-                gl::UNSIGNED_BYTE, tex_data.as_ptr() as *const GLvoid);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-            // unbind
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-        }
-    }));
-
-    let mut imports: Vec<Extern> = Vec::new();
-    for import in module.imports() {
-        assert_eq!(import.module(), "render");
-        let func = render_imports.get(import.name()).unwrap();
-        imports.push(func.clone().into());
-    }
-
-
     // Once we've got that all set up we can then move to the instantiation
     // phase, pairing together a compiled module as well as a set of imports.
     // Note that this is where the wasm `start` function, if any, would run.
-    println!("Instantiating module...");
     // let imports = [
     //     wasm_sin.into(),
     //     draw.into(),
     // ];
-    let instance = Instance::new(&module, &imports)?;
+    let feef = Component::from_file("modules/out/canvas.wasm")?;
+    let component = feef.borrow();
+    // let instance = Instance::new(&module, &imports)?;
+    let instance = component.instance.as_ref().unwrap();
 
     // Next we poke around a bit to extract the `frame` function from the module.
     println!("Extracting export...");
@@ -195,7 +136,6 @@ fn main() -> Result<()> {
     let shader_program = ShaderProgram::from_shaders(&[vert_shader, frag_shader]).unwrap();
 
     println!("Starting main loop");
-    memory = instance.get_memory("memory");
     init()?;
     let mut event_pump = sdl_context.event_pump().unwrap();
     'mainloop: loop {
@@ -230,6 +170,7 @@ fn main() -> Result<()> {
         }
 
         shader_program.set_used();
+        unsafe { gl::BindVertexArray(vao); }
         update()?;
 
         // canvas.present();
@@ -326,4 +267,117 @@ impl Drop for ShaderProgram {
             gl::DeleteProgram(self.id);
         }
     }
+}
+
+// ------------------------
+// Wasm Component
+struct Component {
+    instance: Option<Instance>,
+}
+impl<'a> Component {
+    pub fn from_file(filename: &str) -> Result<Rc<RefCell<Component>>> {
+        let ret = Rc::new(RefCell::new(Component { instance: None }));
+        ret.borrow_mut().instance = Some(Component::initialize(&ret, filename)?);
+        Ok(ret)
+    }
+
+    fn initialize(component: &Rc<RefCell<Component>>, filename: &str) -> Result<Instance> {
+        println!("Compiling wasm module...");
+        let store = Store::default();
+        // Compile the wasm binary into an in-memory instance of a `Module`.
+        let module = Module::from_file(&store, filename)?;
+
+        // Dictionary of imports for "render" module
+        // let ptr = Rc::new(self);
+        // let render_imports = Component::imports_for_render(ptr.clone(), &store);
+        // let render_imports = Component::imports_for_render(component, &store);
+
+        let mut render_imports = HashMap::new();
+        render_imports.insert("drawImage".to_string(), Func::wrap(&store, Component::drawImage));
+        render_imports.insert("allocImage".to_string(), Func::wrap(&store, || {
+            let mut tex_id: GLuint = 0;
+            unsafe {
+                gl::GenTextures(1, &mut tex_id);
+            }
+            tex_id as i32
+        }));
+        let feee = component.clone();
+        render_imports.insert("updateImage".to_string(), Func::wrap(&store, move |tex_id: i32, image_ptr: i32, image_size: i32| {
+            // TODO: pass these in
+            let tex_w: i32 = 16;
+            let tex_h: i32 = 16;
+            let mut tex_data: Vec<u8> = vec![];
+            // let memory = unsafe { rcself.clone().instance.as_ref().unwrap().get_memory("memory").unwrap() };
+            let component_ref = feee.borrow();
+            let memory = component_ref.instance.as_ref().unwrap().get_memory("memory").unwrap();
+            for i in 0..image_size {
+                // tex_data.push(i as u8);
+                unsafe { tex_data.push(memory.data_unchecked()[(image_ptr + i) as usize]); }
+            }
+            unsafe {
+                gl::BindTexture(gl::TEXTURE_2D, tex_id as u32);
+                gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RED as i32, tex_w, tex_h, 0, gl::RED as u32,
+                    gl::UNSIGNED_BYTE, tex_data.as_ptr() as *const GLvoid);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+                // unbind
+                gl::BindTexture(gl::TEXTURE_2D, 0);
+            }
+        }));
+
+        let mut imports: Vec<Extern> = Vec::new();
+        for import in module.imports() {
+            assert_eq!(import.module(), "render");
+            let func = render_imports.get(import.name()).unwrap();
+            imports.push(func.clone().into());
+        }
+
+        println!("Instantiating module...");
+        Instance::new(&module, &imports)
+    }
+
+    // fn imports_for_render(component: &Rc<RefCell<Component>>, store: &Store) -> HashMap<String, Func> {
+
+    //     render_imports
+    // }
+
+    fn drawImage(tex_id: i32) {
+        unsafe {
+            // TODO: I have no idea why this needs println! to function, ignoring for now
+            // let loc = gl::GetUniformLocation(shader_program.id, CString::new("Texture").unwrap().as_ptr());
+            // println!("Location: {}", loc);
+            let loc = -1;
+            gl::BindTexture(gl::TEXTURE_2D, tex_id as u32);
+            gl::Uniform1i(loc, tex_id);
+
+            gl::DrawArrays(gl::TRIANGLES, 0, 6);
+        }
+    }
+    //     render_imports.insert("allocImage".to_string(), Func::wrap(&store, || {
+    //         let mut tex_id: GLuint = 0;
+    //         unsafe {
+    //             gl::GenTextures(1, &mut tex_id);
+    //         }
+    //         tex_id as i32
+    //     }));
+    //     render_imports.insert("updateImage".to_string(), Func::wrap(&store, |tex_id: i32, image_ptr: i32, image_size: i32| {
+    //         // TODO: pass these in
+    //         let tex_w: i32 = 16;
+    //         let tex_h: i32 = 16;
+    //         let mut tex_data: Vec<u8> = vec![];
+    //         let memory = unsafe { rcself.clone().instance.as_ref().unwrap().get_memory("memory").unwrap() };
+    //         for i in 0..image_size {
+    //             tex_data.push(i as u8);
+    //             // unsafe { tex_data.push(memory.data_unchecked()[(image_ptr + i) as usize]); }
+    //         }
+    //         unsafe {
+    //             gl::BindTexture(gl::TEXTURE_2D, tex_id as u32);
+    //             gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RED as i32, tex_w, tex_h, 0, gl::RED as u32,
+    //                 gl::UNSIGNED_BYTE, tex_data.as_ptr() as *const GLvoid);
+    //             gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+    //             gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+    //             // unbind
+    //             gl::BindTexture(gl::TEXTURE_2D, 0);
+    //         }
+    //     }));
 }
