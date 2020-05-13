@@ -38,7 +38,13 @@ void init() {
     updateImage(imageId, (int)imageData, imageSize);
 }
 
+u8 toPaint = 0xff;
 void update() {
+    if (toPaint < 5) {
+        toPaint = 0;
+    } else {
+        toPaint -= 5;
+    }
     drawImage(imageId);
 }
 
@@ -52,7 +58,7 @@ void mouseEvent(int event, int x, int y) {
                 int j = y * height / screenHeight;
                 int idx = i + j * width;
                 if (idx >= 0 && idx < width * height) {
-                    imageData[idx] = 0xff - imageData[idx];
+                    imageData[idx] = toPaint;
                     updateImage(imageId, (int)imageData, imageSize);
                 }
             }
@@ -60,6 +66,7 @@ void mouseEvent(int event, int x, int y) {
         }
         case 1: { // down
             isDown = true;
+            toPaint = 0xff;
             break;
         }
         case 2: { // up
