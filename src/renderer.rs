@@ -12,11 +12,13 @@ use std::{
 
 pub struct Renderer {
     pub sdl_context: sdl2::Sdl,
-    gl_context: GLContext,
     shader_program: ShaderProgram,
     vao: GLuint,
-    // vbo: GLuint,
     window: Window,
+
+    // Need to capture this so that it doesn't get Drop'd
+    #[allow(dead_code)]
+    gl_context: GLContext,
 }
 
 impl Renderer {

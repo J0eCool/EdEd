@@ -21,22 +21,22 @@ use renderer::Renderer;
 fn main() -> Result<()> {
     let render = Renderer::new();
 
-    let feef = Component::from_file("modules/out/canvas.wasm")?;
-    let component = feef.borrow();
+    let canvas_rc = Component::from_file("modules/out/canvas.wasm")?;
+    let canvas_ref = canvas_rc.borrow();
     // let instance = Instance::new(&module, &imports)?;
-    let instance = component.instance.as_ref().unwrap();
+    let canvas_instance = canvas_ref.instance.as_ref().unwrap();
 
     // Next we poke around a bit to extract the `frame` function from the module.
     println!("Extracting export...");
-    let init = instance
+    let init = canvas_instance
         .get_func("init")
         .ok_or(anyhow::format_err!("failed to find `init` function export"))?
         .get0::<()>()?;
-    let update = instance
+    let update = canvas_instance
         .get_func("update")
         .ok_or(anyhow::format_err!("failed to find `update` function export"))?
         .get0::<()>()?;
-    let mouse_event = instance
+    let mouse_event = canvas_instance
         .get_func("mouseEvent")
         .ok_or(anyhow::format_err!("failed to find `mouseEvent` function export"))?
         .get3::<i32, i32, i32, ()>()?;
@@ -46,6 +46,9 @@ fn main() -> Result<()> {
     let mut event_pump = render.sdl_context.event_pump().unwrap();
     let canvas_x = 200;
     let canvas_y = 150;
+    let to_canvas_space = |x: i32, y: i32| -> (i32, i32) {
+        (x - canvas_x, 600 - y - canvas_y)
+    };
     'mainloop: loop {
         unsafe {
             gl::Viewport(0, 0, 800, 600);
@@ -61,16 +64,19 @@ fn main() -> Result<()> {
                     break 'mainloop
                 },
                 Event::MouseMotion { x, y, .. } => {
-                    mouse_event(0, x - canvas_x, 600 - y - canvas_y)?;
+                    let (x, y) = to_canvas_space(x, y);
+                    mouse_event(0, x, y)?;
                 },
                 Event::MouseButtonDown { mouse_btn, x, y, .. } => {
                     if mouse_btn == MouseButton::Left {
-                        mouse_event(1, x - canvas_x, 600 - y - canvas_y)?;
+                        let (x, y) = to_canvas_space(x, y);
+                        mouse_event(1, x, y)?;
                     }
                 },
                 Event::MouseButtonUp { mouse_btn, x, y, .. } => {
                     if mouse_btn == MouseButton::Left {
-                        mouse_event(2, x - canvas_x, 600 - y - canvas_y)?;
+                        let (x, y) = to_canvas_space(x, y);
+                        mouse_event(2, x, y)?;
                     }
                 },
                 _ => {}
