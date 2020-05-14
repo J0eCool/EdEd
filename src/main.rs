@@ -15,19 +15,20 @@ use std::{
 
 mod component;
 mod renderer;
-use component::Component;
+use component::{Component, Imports};
 use renderer::Renderer;
 
 fn main() -> Result<()> {
     let render = Renderer::new();
 
-    let canvas_rc = Component::from_file("modules/out/canvas.wasm")?;
+    let canvas_rc = Component::init();
+    let mut canvas_imports = Imports::new();
+    canvas_imports.add_module("render", Renderer::import_module(&canvas_rc));
+    canvas_rc.borrow_mut().instance = Some(Component::initialize(&canvas_rc, "modules/out/canvas.wasm", &canvas_imports)?);
     let canvas_ref = canvas_rc.borrow();
-    // let instance = Instance::new(&module, &imports)?;
     let canvas_instance = canvas_ref.instance.as_ref().unwrap();
 
-    // Next we poke around a bit to extract the `frame` function from the module.
-    println!("Extracting export...");
+    println!("Extracting exports...");
     let init = canvas_instance
         .get_func("init")
         .ok_or(anyhow::format_err!("failed to find `init` function export"))?
