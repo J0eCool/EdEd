@@ -13,17 +13,35 @@ use std::{
     time::Duration,
 };
 
+use wasmtime::*;
+
 mod component;
 mod renderer;
-use component::{Component, Imports};
+use component::{Component, Imports, ImportModule};
 use renderer::Renderer;
 
 fn main() -> Result<()> {
     let render = Renderer::new();
+    let store = Store::default();
 
-    let canvas_rc = Component::init();
+    let input_rc = Component::init(&store);
+    let mut input_imports = Imports::new();
+    input_rc.borrow_mut().instance = Some(Component::initialize(&input_rc, "modules/out/input.wasm", &input_imports)?);
+    let input_ref = input_rc.borrow();
+    let input_instance = input_ref.instance.as_ref().unwrap();
+
+    let canvas_rc = Component::init(&store);
     let mut canvas_imports = Imports::new();
     canvas_imports.add_module("render", Renderer::import_module(&canvas_rc));
+    {
+        let canvas_ref = canvas_rc.borrow();
+        canvas_imports.add_module("input", ImportModule::from_vec(vec![
+            ("mouseIsDown", input_instance.get_func("mouseIsDown").unwrap()),
+            ("mouseWentDown", input_instance.get_func("mouseWentDown").unwrap()),
+            ("mouseX", input_instance.get_func("mouseX").unwrap()),
+            ("mouseY", input_instance.get_func("mouseY").unwrap()),
+        ]));
+    }
     canvas_rc.borrow_mut().instance = Some(Component::initialize(&canvas_rc, "modules/out/canvas.wasm", &canvas_imports)?);
     let canvas_ref = canvas_rc.borrow();
     let canvas_instance = canvas_ref.instance.as_ref().unwrap();
@@ -33,13 +51,18 @@ fn main() -> Result<()> {
         .get_func("init")
         .ok_or(anyhow::format_err!("failed to find `init` function export"))?
         .get0::<()>()?;
-    let update = canvas_instance
+    let canvas_update = canvas_instance
         .get_func("update")
         .ok_or(anyhow::format_err!("failed to find `update` function export"))?
         .get0::<()>()?;
-    let mouse_event = canvas_instance
-        .get_func("mouseEvent")
-        .ok_or(anyhow::format_err!("failed to find `mouseEvent` function export"))?
+
+    let input_update = input_instance
+        .get_func("update")
+        .ok_or(anyhow::format_err!("failed to find `update` function export"))?
+        .get0::<()>()?;
+    let mouse_event = input_instance
+        .get_func("onMouseEvent")
+        .ok_or(anyhow::format_err!("failed to find `onMouseEvent` function export"))?
         .get3::<i32, i32, i32, ()>()?;
 
     println!("Starting main loop");
@@ -56,8 +79,7 @@ fn main() -> Result<()> {
             gl::ClearColor(0.8, 0.8, 0.8, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
-        // canvas.set_draw_color(Color::RGB(i, 64, 255 - i));
-        // canvas.clear();
+        input_update()?; // TODO: figure out generic timing on this
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit {..} |
@@ -85,7 +107,7 @@ fn main() -> Result<()> {
         }
 
         render.pre_update();
-        update()?;
+        canvas_update()?;
         render.post_update();
 
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));

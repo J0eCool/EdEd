@@ -17,9 +17,9 @@ pub struct Component {
     pub store: Store,
 }
 impl<'a> Component {
-    pub fn init() -> Rc<RefCell<Component>> {
+    pub fn init(store: &Store) -> Rc<RefCell<Component>> {
         Rc::new(RefCell::new(Component {
-            store: Store::default(),
+            store: store.clone(),
             instance: None,
         }))
     }

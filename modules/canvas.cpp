@@ -5,10 +5,15 @@ import "render" {
     func drawImage(s32);
     func updateImage(s32, s32, s32);
 }
+import "input" {
+    func mouseIsDown() -> u1;
+    func mouseWentDown() -> u1;
+    func mouseX() -> s32;
+    func mouseY() -> s32;
+}
 export {
     func init();
     func update();
-    func mouseEvent(s32, s32, s32);
 }
 
 /**IT_END**/
@@ -39,39 +44,27 @@ void init() {
 }
 
 u8 toPaint = 0xff;
+void paint(int x, int y) {
+    int i = x * width / screenWidth;
+    int j = y * height / screenHeight;
+    int idx = i + j * width;
+    if (idx >= 0 && idx < width * height) {
+        imageData[idx] = toPaint;
+        updateImage(imageId, (int)imageData, imageSize);
+    }
+}
+
 void update() {
     if (toPaint < 5) {
         toPaint = 0;
     } else {
         toPaint -= 5;
     }
-    drawImage(imageId);
-}
-
-bool isDown = false;
-// TODO: enums for events, maybe structure?
-void mouseEvent(int event, int x, int y) {
-    switch (event) {
-        case 0: { // move
-            if (isDown) {
-                int i = x * width / screenWidth;
-                int j = y * height / screenHeight;
-                int idx = i + j * width;
-                if (idx >= 0 && idx < width * height) {
-                    imageData[idx] = toPaint;
-                    updateImage(imageId, (int)imageData, imageSize);
-                }
-            }
-            break;
-        }
-        case 1: { // down
-            isDown = true;
-            toPaint = 0xff;
-            break;
-        }
-        case 2: { // up
-            isDown = false;
-            break;
-        }
+    if (mouseWentDown()) {
+        toPaint = 0xff;
     }
+    if (mouseIsDown()) {
+        paint(mouseX(), mouseY());
+    }
+    drawImage(imageId);
 }

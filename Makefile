@@ -1,4 +1,6 @@
-WASM_FILES=modules/out/canvas.wasm
+WASM_FILES=\
+modules/out/canvas.wasm \
+modules/out/input.wasm \
 
 default: $(WASM_FILES)
 
