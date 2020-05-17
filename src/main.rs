@@ -30,8 +30,7 @@ fn notes_app() -> Result<()> {
     let store = Store::default();
 
     let input_rc = Component::init(&store);
-    let mut input_imports = Imports::new();
-    input_rc.borrow_mut().instance = Some(Component::initialize(&input_rc, "modules/out/input.wasm", &input_imports)?);
+    input_rc.borrow_mut().instance = Some(Component::initialize(&input_rc, "modules/out/input.wasm", Imports::new())?);
     let input_ref = input_rc.borrow();
     let input_instance = input_ref.instance.as_ref().unwrap();
 
@@ -41,15 +40,11 @@ fn notes_app() -> Result<()> {
     notes_imports.add_module("input", ImportModule::from_vec(vec![
         ("keyWentDown", input_instance.get_func("keyWentDown").unwrap()),
     ]));
-    notes_rc.borrow_mut().instance = Some(Component::initialize(&notes_rc, "modules/out/notes.wasm", &notes_imports)?);
+    notes_rc.borrow_mut().instance = Some(Component::initialize(&notes_rc, "modules/out/notes.wasm", notes_imports)?);
     let notes_ref = notes_rc.borrow();
     let notes_instance = notes_ref.instance.as_ref().unwrap();
 
     println!("Extracting exports...");
-    let init = notes_instance
-        .get_func("init")
-        .ok_or(anyhow::format_err!("failed to find `init` function export"))?
-        .get0::<()>()?;
     let notes_update = notes_instance
         .get_func("update")
         .ok_or(anyhow::format_err!("failed to find `update` function export"))?
@@ -65,7 +60,6 @@ fn notes_app() -> Result<()> {
         .get3::<i32, i32, i32, ()>()?;
 
     println!("Starting main loop");
-    init()?;
     let mut event_pump = render.sdl_context.event_pump().unwrap();
     let canvas_x = 200;
     let canvas_y = 150;
@@ -119,13 +113,12 @@ fn notes_app() -> Result<()> {
     Ok(())
 }
 
-fn pixel_editor() -> Result<()> {
+fn _pixel_editor() -> Result<()> {
     let render = Renderer::new();
     let store = Store::default();
 
     let input_rc = Component::init(&store);
-    let mut input_imports = Imports::new();
-    input_rc.borrow_mut().instance = Some(Component::initialize(&input_rc, "modules/out/input.wasm", &input_imports)?);
+    input_rc.borrow_mut().instance = Some(Component::initialize(&input_rc, "modules/out/input.wasm", Imports::new())?);
     let input_ref = input_rc.borrow();
     let input_instance = input_ref.instance.as_ref().unwrap();
 
@@ -138,7 +131,7 @@ fn pixel_editor() -> Result<()> {
         ("mouseX", input_instance.get_func("mouseX").unwrap()),
         ("mouseY", input_instance.get_func("mouseY").unwrap()),
     ]));
-    canvas_rc.borrow_mut().instance = Some(Component::initialize(&canvas_rc, "modules/out/canvas.wasm", &canvas_imports)?);
+    canvas_rc.borrow_mut().instance = Some(Component::initialize(&canvas_rc, "modules/out/canvas.wasm", canvas_imports)?);
     let canvas_ref = canvas_rc.borrow();
     let canvas_instance = canvas_ref.instance.as_ref().unwrap();
 

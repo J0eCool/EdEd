@@ -173,6 +173,9 @@ impl Renderer {
                     gl::BindTexture(gl::TEXTURE_2D, 0);
                 }
             })),
+            ("drawText", Func::wrap(&store, |_text_ptr: i32| {
+                // TODO
+            })),
         ])
     }
 }
