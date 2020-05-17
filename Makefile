@@ -1,6 +1,7 @@
 WASM_FILES=\
 modules/out/canvas.wasm \
 modules/out/input.wasm \
+modules/out/notes.wasm \
 
 default: $(WASM_FILES)
 

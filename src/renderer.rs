@@ -8,7 +8,6 @@ use sdl2::{
 };
 use std::{
     cell::RefCell,
-    collections::HashMap,
     ffi::CString,
     rc::Rc,
 };

@@ -11,6 +11,8 @@ export {
     func mouseWentUp() -> u1;
     func mouseX() -> s32;
     func mouseY() -> s32;
+
+    func keyWentDown(s8) -> u1;
 }
 
 /**IT_END**/
@@ -24,11 +26,13 @@ void update() {
     wasDown = isDown;
 }
 
+// ----------------
+// Mouse input
 // TODO: enums for events, maybe structure?
-void onMouseEvent(int event, int x, int y) {
+void onMouseEvent(int eventId, int x, int y) {
     xPos = x;
     yPos = y;
-    switch (event) {
+    switch (eventId) {
         case 0: { // move event
             break;
         }
@@ -57,4 +61,11 @@ int mouseX() {
 }
 int mouseY() {
     return yPos;
+}
+
+// -------------
+// Keyboard input
+bool keyWentDown(char key) {
+    // TODO: logic
+    return false;
 }
