@@ -1,0 +1,13 @@
+Pitch Doc: Multi-Sprite Editor
+
+-- sentence
+A sprite editor where you can edit an entire animation by drawing on one frame
+and having it update all of them.
+
+-- paragraph
+
+[TODO]
+
+-- 3 paragraphs
+
+[TODO]
