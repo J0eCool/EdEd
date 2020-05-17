@@ -1,12 +1,11 @@
 // Wasm Component
 
-extern crate gl;
-
 use anyhow::Result;
-use gl::types::*;
 use std::{
     cell::RefCell,
     collections::HashMap,
+    error,
+    fmt,
     rc::Rc,
 };
 
@@ -30,8 +29,12 @@ impl<'a> Component {
         let module = Module::from_file(store, filename)?;
 
         println!("Instantiating module...");
-        Instance::new(&module, &imports.to_list(&module))
+        Instance::new(&module, &imports.to_list(&module)?)
     }
+}
+
+fn unwrap_err<T>(opt: Option<T>, msg: &str) -> Result<T> {
+    opt.map_or_else(|| Err(anyhow::anyhow!(msg.to_string())), |x| Ok(x))
 }
 
 // An import dictionary
@@ -55,14 +58,14 @@ impl Imports {
         self.modules.insert(name.to_string(), module);
     }
 
-    fn to_list(&self, module: &Module) -> Vec<Extern> {
+    fn to_list(&self, module: &Module) -> Result<Vec<Extern>> {
         let mut imports = Vec::new();
         for import in module.imports() {
-            let cur = self.modules.get(import.module()).unwrap();
-            let func = cur.funcs.get(import.name()).unwrap();
+            let cur = unwrap_err(self.modules.get(import.module()), "beep")?;
+            let func = unwrap_err(cur.funcs.get(import.name()), "Doop")?;
             imports.push(func.clone().into());
         }
-        imports
+        Ok(imports)
     }
 }
 
@@ -77,5 +80,22 @@ impl ImportModule {
             funcs.insert(name.to_string(), func);
         }
         ImportModule { funcs }
+    }
+}
+
+//-----------
+// Nicer error handling
+#[derive(Debug, Clone)]
+struct ComponentError {
+    msg: String,
+}
+impl fmt::Display for ComponentError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.msg)
+    }
+}
+impl error::Error for ComponentError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        None
     }
 }
