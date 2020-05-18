@@ -5,6 +5,7 @@
 export {
     func update();
     func onMouseEvent(s32, s32, s32);
+    func onKeyEvent(s32, s32);
 
     func mouseIsDown() -> u1;
     func mouseWentDown() -> u1;
@@ -17,13 +18,23 @@ export {
 
 /**IT_END**/
 
-bool isDown = false;
-bool wasDown = false;
+// Mouse data
+bool isMouseDown = false;
+bool wasMouseDown = false;
 int xPos = 0;
 int yPos = 0;
 
+// Keyboard data
+const int numKeys = 256;
+bool isKeyDown[numKeys];
+bool wasKeyDown[numKeys];
+
 void update() {
-    wasDown = isDown;
+    wasMouseDown = isMouseDown;
+
+    for (int i = 0; i < numKeys; ++i) {
+        wasKeyDown[i] = isKeyDown[i];
+    }
 }
 
 // ----------------
@@ -37,24 +48,36 @@ void onMouseEvent(int eventId, int x, int y) {
             break;
         }
         case 1: { // down event
-            isDown = true;
+            isMouseDown = true;
             break;
         }
         case 2: { // up event
-            isDown = false;
+            isMouseDown = false;
             break;
         }
     }
 }
 
+void onKeyEvent(int eventId, int key) {
+    if (key >= numKeys) return;
+    switch (eventId) {
+        case 0: // key down
+            isKeyDown[key] = true;
+            break;
+        case 1:
+            isKeyDown[key] = false;
+            break;
+    }
+}
+
 bool mouseIsDown() {
-    return isDown;
+    return isMouseDown;
 }
 bool mouseWentDown() {
-    return isDown && !wasDown;
+    return isMouseDown && !wasMouseDown;
 }
 bool mouseWentUp() {
-    return !isDown && wasDown;
+    return !isMouseDown && wasMouseDown;
 }
 int mouseX() {
     return xPos;
@@ -66,6 +89,5 @@ int mouseY() {
 // -------------
 // Keyboard input
 bool keyWentDown(char key) {
-    // TODO: logic
-    return false;
+    return isKeyDown[key] && !wasKeyDown[key];
 }

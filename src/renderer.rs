@@ -132,9 +132,8 @@ impl Renderer {
 
     pub fn import_module(component: &Rc<RefCell<Component>>) -> ImportModule {
         let store = &component.borrow().store;
-        let component_rc = component.clone();
-        ImportModule::from_vec(vec![
-            ("drawImage", Func::wrap(&store, |tex_id: i32| {
+        let mut ret = ImportModule::new();
+        ret.add_func("drawImage", Func::wrap(&store, |tex_id: i32| {
                 unsafe {
                     // TODO: I have no idea why this needs println! to function, ignoring for now
                     // let loc = gl::GetUniformLocation(shader_program.id, CString::new("Texture").unwrap().as_ptr());
@@ -145,38 +144,54 @@ impl Renderer {
 
                     gl::DrawArrays(gl::TRIANGLES, 0, 6);
                 }
-            })),
-            ("allocImage", Func::wrap(&store, || {
-                let mut tex_id: GLuint = 0;
-                unsafe {
-                    gl::GenTextures(1, &mut tex_id);
-                }
-                tex_id as i32
-            })),
-            ("updateImage", Func::wrap(&store, move |tex_id: i32, image_ptr: i32, image_size: i32| {
-                // TODO: pass these in
-                let tex_w: i32 = 16;
-                let tex_h: i32 = 16;
-                let mut tex_data: Vec<u8> = vec![];
+            }));
+        ret.add_func("allocImage", Func::wrap(&store, || {
+            let mut tex_id: GLuint = 0;
+            unsafe {
+                gl::GenTextures(1, &mut tex_id);
+            }
+            tex_id as i32
+        }));
+        {
+            let component_rc = component.clone();
+            ret.add_func("updateImage", Func::wrap(&store, move |tex_id: i32, image_ptr: i32, image_size: i32| {
+                    // TODO: pass these in
+                    let tex_w: i32 = 16;
+                    let tex_h: i32 = 16;
+                    let mut tex_data: Vec<u8> = vec![];
+                    let component_ref = component_rc.borrow();
+                    let memory = component_ref.instance.as_ref().unwrap().get_memory("memory").unwrap();
+                    for i in 0..image_size {
+                        unsafe { tex_data.push(memory.data_unchecked()[(image_ptr + i) as usize]); }
+                    }
+                    unsafe {
+                        gl::BindTexture(gl::TEXTURE_2D, tex_id as u32);
+                        gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RED as i32, tex_w, tex_h, 0, gl::RED as u32,
+                            gl::UNSIGNED_BYTE, tex_data.as_ptr() as *const GLvoid);
+                        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+                        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+                        // unbind
+                        gl::BindTexture(gl::TEXTURE_2D, 0);
+                    }
+                }));
+        }
+        {
+            let component_rc = component.clone();
+            ret.add_func("drawText", Func::wrap(&store, move |text_ptr: i32| {
+                let mut text = String::new();
                 let component_ref = component_rc.borrow();
                 let memory = component_ref.instance.as_ref().unwrap().get_memory("memory").unwrap();
-                for i in 0..image_size {
-                    unsafe { tex_data.push(memory.data_unchecked()[(image_ptr + i) as usize]); }
+                let mut i = 0;
+                loop {
+                    let byte = unsafe { memory.data_unchecked()[(text_ptr + i) as usize] };
+                    if byte == 0 { break; }
+                    i += 1;
+                    text.push(byte as char);
                 }
-                unsafe {
-                    gl::BindTexture(gl::TEXTURE_2D, tex_id as u32);
-                    gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RED as i32, tex_w, tex_h, 0, gl::RED as u32,
-                        gl::UNSIGNED_BYTE, tex_data.as_ptr() as *const GLvoid);
-                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
-                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-                    // unbind
-                    gl::BindTexture(gl::TEXTURE_2D, 0);
-                }
-            })),
-            ("drawText", Func::wrap(&store, |_text_ptr: i32| {
-                // TODO
-            })),
-        ])
+                println!("trying to draw: {}", text);
+            }));
+        }
+        ret
     }
 }
 

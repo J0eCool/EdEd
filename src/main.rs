@@ -46,6 +46,7 @@ fn notes_app() -> Result<()> {
 
     let input_update = input_ref.get_func("update")?.get0::<()>()?;
     let mouse_event = input_ref.get_func("onMouseEvent")?.get3::<i32, i32, i32, ()>()?;
+    let key_event = input_ref.get_func("onKeyEvent")?.get2::<i32, i32, ()>()?;
 
     println!("Starting main loop");
     let mut event_pump = render.sdl_context.event_pump().unwrap();
@@ -68,7 +69,10 @@ fn notes_app() -> Result<()> {
                     break 'mainloop
                 },
                 Event::KeyDown { keycode: Some(code), .. } => {
-                    println!("Key pressed: {}", code as i32);
+                    key_event(0, code as i32)?;
+                },
+                Event::KeyUp { keycode: Some(code), .. } => {
+                    key_event(1, code as i32)?;
                 },
                 Event::MouseMotion { x, y, .. } => {
                     let (x, y) = to_canvas_space(x, y);
@@ -108,7 +112,6 @@ fn _pixel_editor() -> Result<()> {
     let input_rc = Component::init(&store);
     input_rc.borrow_mut().instance = Some(Component::initialize(&input_rc, "modules/out/input.wasm", Imports::new())?);
     let input_ref = input_rc.borrow();
-    let input_instance = input_ref.instance.as_ref().unwrap();
 
     let canvas_rc = Component::init(&store);
     let mut canvas_imports = Imports::new();
