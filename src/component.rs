@@ -44,6 +44,17 @@ impl<'a> Component {
         let f = instance.get_func(name).ok_or(format_err!("Failed to find function: {} in component {}", name, self.filename))?;
         Ok(f)
     }
+
+    pub fn get_exports(&self) -> ImportModule {
+        let instance = self.instance.as_ref().unwrap();
+        let mut exports = ImportModule::new();
+        for export in instance.exports() {
+            export.clone().into_func().map(|f| {
+                exports.add_func(export.name(), f);
+            });
+        }
+        exports
+    }
 }
 
 // An import dictionary
@@ -53,6 +64,14 @@ pub struct Imports {
 impl Imports {
     pub fn new() -> Imports {
         Imports { modules: HashMap::new() }
+    }
+
+    pub fn from_vec(list: Vec<(&str, ImportModule)>) -> Imports {
+        let mut modules = HashMap::new();
+        for (name, module) in list {
+            modules.insert(name.to_string(), module);
+        }
+        Imports { modules }
     }
 
     pub fn add_module(&mut self, name: &str, module: ImportModule) {
@@ -79,11 +98,21 @@ pub struct ImportModule {
     funcs: HashMap<String, Func>,
 }
 impl ImportModule {
+    pub fn new() -> ImportModule {
+        ImportModule {
+            funcs: HashMap::new(),
+        }
+    }
+
     pub fn from_vec(list: Vec<(&str, Func)>) -> ImportModule {
         let mut funcs = HashMap::new();
         for (name, func) in list {
             funcs.insert(name.to_string(), func);
         }
         ImportModule { funcs }
+    }
+
+    pub fn add_func(&mut self, name: &str, f: Func) {
+        self.funcs.insert(name.to_string(), f);
     }
 }

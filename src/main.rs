@@ -17,7 +17,7 @@ use wasmtime::*;
 
 mod component;
 mod renderer;
-use component::{Component, Imports, ImportModule};
+use component::{Component, Imports};
 use renderer::Renderer;
 
 fn main() -> Result<()> {
@@ -32,14 +32,12 @@ fn notes_app() -> Result<()> {
     let input_rc = Component::init(&store);
     input_rc.borrow_mut().instance = Some(Component::initialize(&input_rc, "modules/out/input.wasm", Imports::new())?);
     let input_ref = input_rc.borrow();
-    let input_instance = input_ref.instance.as_ref().unwrap();
 
     let notes_rc = Component::init(&store);
-    let mut notes_imports = Imports::new();
-    notes_imports.add_module("render", Renderer::import_module(&notes_rc));
-    notes_imports.add_module("input", ImportModule::from_vec(vec![
-        ("keyWentDown", input_instance.get_func("keyWentDown").unwrap()),
-    ]));
+    let notes_imports = Imports::from_vec(vec![
+        ("render", Renderer::import_module(&notes_rc)),
+        ("input", input_ref.get_exports()),
+    ]);
     notes_rc.borrow_mut().instance = Some(Component::initialize(&notes_rc, "modules/out/notes.wasm", notes_imports)?);
     let notes_ref = notes_rc.borrow();
 
@@ -70,7 +68,7 @@ fn notes_app() -> Result<()> {
                     break 'mainloop
                 },
                 Event::KeyDown { keycode: Some(code), .. } => {
-                    println!("Key pressed: {}", code);
+                    println!("Key pressed: {}", code as i32);
                 },
                 Event::MouseMotion { x, y, .. } => {
                     let (x, y) = to_canvas_space(x, y);
@@ -115,12 +113,7 @@ fn _pixel_editor() -> Result<()> {
     let canvas_rc = Component::init(&store);
     let mut canvas_imports = Imports::new();
     canvas_imports.add_module("render", Renderer::import_module(&canvas_rc));
-    canvas_imports.add_module("input", ImportModule::from_vec(vec![
-        ("mouseIsDown", input_instance.get_func("mouseIsDown").unwrap()),
-        ("mouseWentDown", input_instance.get_func("mouseWentDown").unwrap()),
-        ("mouseX", input_instance.get_func("mouseX").unwrap()),
-        ("mouseY", input_instance.get_func("mouseY").unwrap()),
-    ]));
+
     canvas_rc.borrow_mut().instance = Some(Component::initialize(&canvas_rc, "modules/out/canvas.wasm", canvas_imports)?);
     let canvas_ref = canvas_rc.borrow();
 
