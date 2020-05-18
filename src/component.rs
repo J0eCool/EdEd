@@ -1,6 +1,6 @@
 // Wasm Component
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow, format_err};
 use std::{
     cell::RefCell,
     collections::HashMap,
@@ -10,19 +10,23 @@ use std::{
 use wasmtime::*;
 
 pub struct Component {
+    filename: String,
     pub instance: Option<Instance>,
     pub store: Store,
 }
 impl<'a> Component {
     pub fn init(store: &Store) -> Rc<RefCell<Component>> {
         Rc::new(RefCell::new(Component {
+            filename: String::new(),
             store: store.clone(),
             instance: None,
         }))
     }
 
     pub fn initialize(component: &Rc<RefCell<Component>>, filename: &str, mut imports: Imports) -> Result<Instance> {
-        println!("Compiling wasm module...");
+        println!("Compiling module: {}", filename);
+        // Store filename for later
+        { component.borrow_mut().filename = filename.to_string(); }
         let store = &component.borrow().store;
         let module = Module::from_file(store, filename)?;
 
@@ -34,17 +38,11 @@ impl<'a> Component {
         println!("Instantiating module...");
         Instance::new(&module, &imports.to_extern_list(&module)?)
     }
-}
 
-trait OptionExt<T> {
-    fn unwrap_err(self, msg: String) -> Result<T>;
-}
-impl<T> OptionExt<T> for Option<T> {
-    fn unwrap_err(self, msg: String) -> Result<T> {
-        match self {
-            Some(x) => Ok(x),
-            None => Err(anyhow!(msg))
-        }
+    pub fn get_func(&self, name: &str) -> Result<Func> {
+        let instance = self.instance.as_ref().ok_or(anyhow!("Instance not set"))?;
+        let f = instance.get_func(name).ok_or(format_err!("Failed to find function: {} in component {}", name, self.filename))?;
+        Ok(f)
     }
 }
 
@@ -66,10 +64,10 @@ impl Imports {
         for import in module.imports() {
             let mod_name = import.module();
             let cur = self.modules.get(import.module())
-                .unwrap_err(format!("No module found with name: {}", mod_name))?;
+                .ok_or(format_err!("No module found with name: {}", mod_name))?;
             let func_name = import.name();
             let func = cur.funcs.get(import.name())
-                .unwrap_err(format!("Import not found: {}/{}", mod_name, func_name))?;
+                .ok_or(format_err!("Import not found: {}/{}", mod_name, func_name))?;
             imports.push(func.clone().into());
         }
         Ok(imports)

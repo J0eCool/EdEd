@@ -42,22 +42,12 @@ fn notes_app() -> Result<()> {
     ]));
     notes_rc.borrow_mut().instance = Some(Component::initialize(&notes_rc, "modules/out/notes.wasm", notes_imports)?);
     let notes_ref = notes_rc.borrow();
-    let notes_instance = notes_ref.instance.as_ref().unwrap();
 
     println!("Extracting exports...");
-    let notes_update = notes_instance
-        .get_func("update")
-        .ok_or(anyhow::format_err!("failed to find `update` function export"))?
-        .get0::<()>()?;
+    let notes_update = notes_ref.get_func("update")?.get0::<()>()?;
 
-    let input_update = input_instance
-        .get_func("update")
-        .ok_or(anyhow::format_err!("failed to find `update` function export"))?
-        .get0::<()>()?;
-    let mouse_event = input_instance
-        .get_func("onMouseEvent")
-        .ok_or(anyhow::format_err!("failed to find `onMouseEvent` function export"))?
-        .get3::<i32, i32, i32, ()>()?;
+    let input_update = input_ref.get_func("update")?.get0::<()>()?;
+    let mouse_event = input_ref.get_func("onMouseEvent")?.get3::<i32, i32, i32, ()>()?;
 
     println!("Starting main loop");
     let mut event_pump = render.sdl_context.event_pump().unwrap();
@@ -133,26 +123,13 @@ fn _pixel_editor() -> Result<()> {
     ]));
     canvas_rc.borrow_mut().instance = Some(Component::initialize(&canvas_rc, "modules/out/canvas.wasm", canvas_imports)?);
     let canvas_ref = canvas_rc.borrow();
-    let canvas_instance = canvas_ref.instance.as_ref().unwrap();
 
     println!("Extracting exports...");
-    let init = canvas_instance
-        .get_func("init")
-        .ok_or(anyhow::format_err!("failed to find `init` function export"))?
-        .get0::<()>()?;
-    let canvas_update = canvas_instance
-        .get_func("update")
-        .ok_or(anyhow::format_err!("failed to find `update` function export"))?
-        .get0::<()>()?;
+    let init = canvas_ref.get_func("init")?.get0::<()>()?;
+    let canvas_update = canvas_ref.get_func("update")?.get0::<()>()?;
 
-    let input_update = input_instance
-        .get_func("update")
-        .ok_or(anyhow::format_err!("failed to find `update` function export"))?
-        .get0::<()>()?;
-    let mouse_event = input_instance
-        .get_func("onMouseEvent")
-        .ok_or(anyhow::format_err!("failed to find `onMouseEvent` function export"))?
-        .get3::<i32, i32, i32, ()>()?;
+    let input_update = input_ref.get_func("update")?.get0::<()>()?;
+    let mouse_event = input_ref.get_func("onMouseEvent")?.get3::<i32, i32, i32, ()>()?;
 
     println!("Starting main loop");
     init()?;
