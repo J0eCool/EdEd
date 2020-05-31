@@ -21,11 +21,11 @@ use component::{Component, Imports};
 use renderer::Renderer;
 
 fn main() -> Result<()> {
-    // pixel_editor()
-    notes_app()
+    pixel_editor()
+    // notes_app()
 }
 
-fn notes_app() -> Result<()> {
+fn _notes_app() -> Result<()> {
     let render = Renderer::new();
     let store = Store::default();
 
@@ -105,7 +105,7 @@ fn notes_app() -> Result<()> {
     Ok(())
 }
 
-fn _pixel_editor() -> Result<()> {
+fn pixel_editor() -> Result<()> {
     let render = Renderer::new();
     let store = Store::default();
 
@@ -114,9 +114,10 @@ fn _pixel_editor() -> Result<()> {
     let input_ref = input_rc.borrow();
 
     let canvas_rc = Component::init(&store);
-    let mut canvas_imports = Imports::new();
-    canvas_imports.add_module("render", Renderer::import_module(&canvas_rc));
-
+    let canvas_imports = Imports::from_vec(vec![
+        ("render", Renderer::import_module(&canvas_rc)),
+        ("input", input_ref.get_exports()),
+    ]);
     canvas_rc.borrow_mut().instance = Some(Component::initialize(&canvas_rc, "modules/out/canvas.wasm", canvas_imports)?);
     let canvas_ref = canvas_rc.borrow();
 

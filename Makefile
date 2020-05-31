@@ -2,6 +2,7 @@ WASM_FILES=\
 modules/out/canvas.wasm \
 modules/out/input.wasm \
 modules/out/notes.wasm \
+modules/out/texture.wasm \
 
 default: $(WASM_FILES)
 

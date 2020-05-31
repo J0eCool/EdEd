@@ -11,6 +11,16 @@ import "input" {
     func mouseX() -> s32;
     func mouseY() -> s32;
 }
+import "texture" {
+    func init(s32, s32);
+
+    // type Color = struct { r: u8, g: u8, b: u8, a: u8 };
+    // type Color = s32;
+    // func getPixel(s32, s32) -> Color;
+    // func setPixel(s32, s32, Color);
+    func getPixel(s32, s32) -> s32;
+    func setPixel(s32, s32, s32);
+}
 export {
     func init();
     func update();
@@ -34,7 +44,6 @@ int screenHeight = 300;
 int imageId = 0;
 
 void init() {
-    imageId = allocImage();
     for (int x = 0; x < width; ++x) {
         for (int y = 0; y < height; ++y) {
             imageData[x + y * width] = (x * x + y * y) / (width + height);
