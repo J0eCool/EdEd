@@ -1,8 +1,11 @@
+// A Texture is a 2D array of pixel data
+
 /**IT_START**/
 
 import "render" {
     func allocImage() -> s32;
-    func updateImage(s32, s32, s32);
+    func updateImage(s32, s32, s32, s32);
+    func drawImage(s32);
 }
 export {
     func init(s32, s32);
@@ -13,6 +16,7 @@ export {
     // func setPixel(s32, s32, Color);
     func getPixel(s32, s32) -> s32;
     func setPixel(s32, s32, s32);
+    func draw();
 }
 
 /**IT_END**/
@@ -23,9 +27,9 @@ struct Color {
     u8 r, g, b, a;
 
     Color() : r(), g(), b(), a() { }
-    Color(int c) : r(c), g(c), b(c), a(0xff) { }
-    Color(int _r, int _g, int _b) : r(_r), g(_g), b(_b), a(0xff) { }
-    Color(int _r, int _g, int _b, int _a) : r(_r), g(_g), b(_b), a(_a) { }
+    Color(unsigned c) : r(c), g(c), b(c), a(0xff) { }
+    Color(unsigned _r, unsigned _g, unsigned _b) : r(_r), g(_g), b(_b), a(0xff) { }
+    Color(unsigned _r, unsigned _g, unsigned _b, unsigned _a) : r(_r), g(_g), b(_b), a(_a) { }
 
     // Not needed with IT support
     operator int() const {
@@ -34,7 +38,7 @@ struct Color {
             | (b << 16)
             | (a << 24);
     }
-    static Color fromInt(int v) {
+    static Color fromInt(unsigned v) {
         return Color(
             v & 0xff,
             (v & 0xff00) >> 8,
@@ -61,4 +65,9 @@ int getPixel(int x, int y) {
 void setPixel(int x, int y, int color_) {
     Color color = Color::fromInt(color_);
     texture[x + w * y] = color;
+    updateImage(imageId, (int)texture, w, h);
+}
+
+void draw() {
+    drawImage(imageId);
 }

@@ -154,20 +154,18 @@ impl Renderer {
         }));
         {
             let component_rc = component.clone();
-            ret.add_func("updateImage", Func::wrap(&store, move |tex_id: i32, image_ptr: i32, image_size: i32| {
-                    // TODO: pass these in
-                    let tex_w: i32 = 16;
-                    let tex_h: i32 = 16;
+            ret.add_func("updateImage", Func::wrap(&store, move |tex_id: i32, image_ptr: i32, tex_w, tex_h| {
                     let mut tex_data: Vec<u8> = vec![];
                     let component_ref = component_rc.borrow();
                     let memory = component_ref.instance.as_ref().unwrap().get_memory("memory").unwrap();
-                    for i in 0..image_size {
+                    let image_size = tex_w * tex_h;
+                    for i in 0..image_size*4 {
                         unsafe { tex_data.push(memory.data_unchecked()[(image_ptr + i) as usize]); }
                     }
                     unsafe {
                         gl::BindTexture(gl::TEXTURE_2D, tex_id as u32);
-                        gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RED as i32, tex_w, tex_h, 0, gl::RED as u32,
-                            gl::UNSIGNED_BYTE, tex_data.as_ptr() as *const GLvoid);
+                        gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA as i32, tex_w, tex_h, 0, gl::RGBA as u32,
+                            gl::UNSIGNED_INT_8_8_8_8, tex_data.as_ptr() as *const GLvoid);
                         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
                         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
                         // unbind

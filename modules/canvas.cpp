@@ -1,8 +1,9 @@
+// A canvas is a window in to a texture-editing context
+
 /**IT_START**/
 
 import "render" {
     func allocImage() -> s32;
-    func drawImage(s32);
     func updateImage(s32, s32, s32);
 }
 import "input" {
@@ -11,7 +12,10 @@ import "input" {
     func mouseX() -> s32;
     func mouseY() -> s32;
 }
-import "texture" {
+// TO DO: rewrite canvas.cpp to USE Texture modules
+// TO DO: fix C++ parser/generator as well
+type Texture = import "texture" {
+// import "texture" {
     func init(s32, s32);
 
     // type Color = struct { r: u8, g: u8, b: u8, a: u8 };
@@ -20,6 +24,7 @@ import "texture" {
     // func setPixel(s32, s32, Color);
     func getPixel(s32, s32) -> s32;
     func setPixel(s32, s32, s32);
+    func draw();
 }
 export {
     func init();
@@ -28,52 +33,63 @@ export {
 
 /**IT_END**/
 
-typedef unsigned char u8;
+// TODO: autogenerate this
+#define IMPORT(ns, n) __attribute__((import_module(ns), import_name(n)))
+using _Texture = void*;
+IMPORT("texture", "_construct") _Texture Texture_construct();
+IMPORT("texture", "init") void init(_Texture, int, int);
+IMPORT("texture", "getPixel") int getPixel(_Texture, int, int);
+IMPORT("texture", "setPixel") void setPixel(_Texture, int, int, int);
+IMPORT("texture", "draw") void draw(_Texture);
+class Texture {
+    _Texture data;
+public:
+    // Texture() : data(nullptr) {}
+    Texture() : data(Texture_construct()) {}
+    void init(int _1, int _2) {
+        return ::init(data, _1, _2);
+    }
+    int getPixel(int _1, int _2) {
+        return ::getPixel(data, _1, _2);
+    }
+    void setPixel(int _1, int _2, int _3) {
+        return ::setPixel(data, _1, _2, _3);
+    }
+    void draw() {
+        return ::draw(data);
+    }
+};
 
-int t = 0;
-float PI = 3.14159;
-const int width = 16;
-const int height = 16;
-const int imageSize = width * height;
-u8 imageData[imageSize];
+typedef unsigned char u8;
 
 // TODO: programmatically
 int screenWidth = 400;
 int screenHeight = 300;
 
-int imageId = 0;
+Texture tex;
+const int width = 16;
+const int height = 16;
 
 void init() {
+    tex = Texture();
+    tex.init(width, height);
     for (int x = 0; x < width; ++x) {
         for (int y = 0; y < height; ++y) {
-            imageData[x + y * width] = (x * x + y * y) / (width + height);
+            tex.setPixel(x, y, 0);
         }
     }
-    updateImage(imageId, (int)imageData, imageSize);
 }
 
-u8 toPaint = 0xff;
 void paint(int x, int y) {
     int i = x * width / screenWidth;
     int j = y * height / screenHeight;
-    int idx = i + j * width;
-    if (idx >= 0 && idx < width * height) {
-        imageData[idx] = toPaint;
-        updateImage(imageId, (int)imageData, imageSize);
-    }
+    int color = 0xfff00fff; // TODO: see why this shows as white
+    tex.setPixel(i, j, color);
 }
 
 void update() {
-    if (toPaint < 5) {
-        toPaint = 0;
-    } else {
-        toPaint -= 5;
-    }
-    if (mouseWentDown()) {
-        toPaint = 0xff;
-    }
     if (mouseIsDown()) {
         paint(mouseX(), mouseY());
     }
-    drawImage(imageId);
+    tex.draw();
 }

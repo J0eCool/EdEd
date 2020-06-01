@@ -9,12 +9,68 @@ use std::{
 
 use wasmtime::*;
 
+static mut COMPONENTS: Vec<Rc<RefCell<Component>>> = Vec::new();
+pub struct WrappedComponent {}
+impl<'a> WrappedComponent {
+    pub fn loader<T>(store: &Store, imports: T) -> ImportModule
+    where T: Fn(&Rc<RefCell<Component>>) -> Imports,
+          T: 'static,
+          // T: 'a,
+    {
+        let mut module = ImportModule::new();
+        {
+            // let rc = COMPONENTS.clone();
+            let s2 = store.clone();
+            module.add_func("_construct", Func::wrap(&store.clone(), move || {
+                unsafe {
+                    let id = COMPONENTS.len();
+                    let texture_rc = Component::init(&s2);
+                    let instance = Component::initialize(&texture_rc, "modules/out/texture.wasm", imports(&texture_rc)).unwrap();
+                    texture_rc.borrow_mut().instance = Some(instance);
+                    COMPONENTS.push(texture_rc);
+                    id as i32
+                }
+            }));
+        }
+        module.add_func("init", Func::wrap(&store, |id: i32, w, h| {
+            unsafe {
+                COMPONENTS[id as usize].borrow().get_func("init").unwrap()
+                    .get2::<i32, i32, ()>().unwrap()
+                    (w, h).unwrap();
+            }
+        }));
+        module.add_func("setPixel", Func::wrap(&store, |id: i32, x, y, color| {
+            unsafe {
+                COMPONENTS[id as usize].borrow().get_func("setPixel").unwrap()
+                    .get3::<i32, i32, i32, ()>().unwrap()
+                    (x, y, color).unwrap();
+            }
+        }));
+        module.add_func("getPixel", Func::wrap(&store, |id: i32, x, y| {
+            unsafe {
+                COMPONENTS[id as usize].borrow().get_func("getPixel").unwrap()
+                    .get2::<i32, i32, i32>().unwrap()
+                    (x, y).unwrap()
+            }
+        }));
+        module.add_func("draw", Func::wrap(&store, |id: i32| {
+            unsafe {
+                COMPONENTS[id as usize].borrow().get_func("draw").unwrap()
+                    .get0::<()>().unwrap()
+                    ().unwrap()
+            }
+        }));
+
+        module
+    }
+}
+
 pub struct Component {
     filename: String,
     pub instance: Option<Instance>,
     pub store: Store,
 }
-impl<'a> Component {
+impl Component {
     pub fn init(store: &Store) -> Rc<RefCell<Component>> {
         Rc::new(RefCell::new(Component {
             filename: String::new(),
